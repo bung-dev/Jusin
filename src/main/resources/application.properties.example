@@ -1,0 +1,100 @@
+# ================================================================
+# Spring Boot 4.0.4 Application Configuration Example
+#
+# 이 파일은 애플리케이션 설정의 템플릿입니다.
+# application.properties로 복사하고 실제 값을 설정하세요.
+# ================================================================
+
+# ================================================================
+# 서버 설정
+# ================================================================
+# 애플리케이션이 실행될 포트 번호
+server.port=8080
+
+# ================================================================
+# 데이터베이스 설정 (MySQL)
+# ================================================================
+# MySQL 데이터베이스 연결 URL
+# - useSSL=false: SSL 연결 비활성화 (개발 환경용)
+# - serverTimezone=Asia/Seoul: 타임존 설정
+# - allowPublicKeyRetrieval=true: 공개 키 검색 허용
+spring.datasource.url=${DB_URL:jdbc:mysql://localhost:3306/jusin?useSSL=false&serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true}
+
+# 데이터베이스 사용자명
+spring.datasource.username=${DB_USERNAME}
+
+# 데이터베이스 비밀번호
+spring.datasource.password=${DB_PASSWORD}
+
+# MySQL JDBC 드라이버 클래스
+spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+
+# ================================================================
+# JPA/Hibernate 설정
+# ================================================================
+# DDL(Data Definition Language) 자동 실행 전략
+# - validate: 엔티티와 스키마가 일치하는지만 검증 (운영 환경 권장)
+# - update: 스키마 자동 업데이트 (개발 환경용)
+# - create: 매번 새로 생성 (테스트 환경용)
+# - create-drop: 시작 시 생성, 종료 시 삭제 (테스트 환경용)
+spring.jpa.hibernate.ddl-auto=validate
+
+# Hibernate SQL 방언 설정 (MySQL 8.0+ 권장)
+spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQLDialect
+
+# SQL 포맷팅 활성화 (로그의 가독성 향상)
+spring.jpa.properties.hibernate.format_sql=true
+
+# SQL 쿼리 로그 출력 (false 권장: 성능 영향)
+spring.jpa.show-sql=false
+
+# ================================================================
+# DART API 설정 (금융감시위원회 공시 정보)
+# ================================================================
+# DART API 인증 키
+dart.api.key=${DART_API_KEY}
+
+# DART API 기본 URL
+dart.api.base-url=https://opendart.fss.or.kr/api
+
+# ================================================================
+# 로깅 설정
+# ================================================================
+# 애플리케이션 로그 레벨 (TRACE, DEBUG, INFO, WARN, ERROR)
+logging.level.com.jusin=INFO
+
+# Hibernate SQL 로그 레벨 (SQL 쿼리 로깅 제한)
+logging.level.org.hibernate.SQL=WARN
+
+# ================================================================
+# Quartz 스케줄러 설정
+# ================================================================
+# Job Store 유형
+# - memory: 인메모리 저장소 (개발/테스트 환경, 재시작 시 데이터 손실)
+# - jdbc: 데이터베이스 저장소 (운영 환경, 클러스터 환경)
+spring.quartz.job-store-type=memory
+
+# 애플리케이션 시작 시 자동으로 스케줄러 시작 여부
+spring.quartz.auto-startup=false
+
+# ================================================================
+# 환경변수 설정 가이드
+# ================================================================
+# 다음 환경변수를 시스템에 설정하세요:
+#
+# Linux/macOS:
+#   export DB_URL="jdbc:mysql://db.example.com:3306/jusin?useSSL=false&serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true"
+#   export DB_USERNAME="root"
+#   export DB_PASSWORD="your_password"
+#   export DART_API_KEY="your_api_key"
+#
+# Windows (PowerShell):
+#   $env:DB_URL="jdbc:mysql://db.example.com:3306/jusin?useSSL=false&serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true"
+#   $env:DB_USERNAME="root"
+#   $env:DB_PASSWORD="your_password"
+#   $env:DART_API_KEY="your_api_key"
+#
+# Docker:
+#   docker run -e DB_URL=... -e DB_USERNAME=... ...
+#
+# ================================================================
