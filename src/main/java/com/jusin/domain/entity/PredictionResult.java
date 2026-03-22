@@ -29,11 +29,11 @@ public class PredictionResult {
     private Integer totalScore;
 
     @Enumerated(EnumType.STRING)
-    @Column(length = 20)
+    @Column(name = "`signal`", length = 20)
     private Signal signal;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "signal_level", length = 20)
+    @Column(name = "`signal_level`", length = 20)
     private SignalLevel signalLevel;
 
     @Column(length = 10)
