@@ -1,0 +1,59 @@
+# Docker Compose 로컬 개발 환경 설정
+# 사용법:
+#   시작: docker compose up -d
+#   종료: docker compose down
+#   데이터 삭제: docker compose down -v
+
+version: '3.8'
+
+services:
+  mysql:
+    # MySQL 8.0 공식 이미지 사용
+    image: mysql:8.0
+
+    # 컨테이너 이름 지정
+    container_name: jusin_mysql
+
+    # 환경 변수 설정
+    environment:
+      # MySQL 루트 계정 비밀번호 (기본값: rootpass)
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass}
+
+      # 생성할 데이터베이스명
+      MYSQL_DATABASE: jusin
+
+      # 일반 사용자명 (기본값: jusin)
+      MYSQL_USER: ${MYSQL_USER:-jusin}
+
+      # 일반 사용자 비밀번호 (기본값: jusinpass)
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-jusinpass}
+
+    # 포트 매핑 (호스트:컨테이너)
+    ports:
+      - "3307:3306"
+
+    # MySQL 설정 명령어
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+
+    # 데이터 영속성을 위한 볼륨 마운트
+    volumes:
+      # MySQL 데이터 볼륨 (컨테이너 재시작 후에도 데이터 유지)
+      - jusin_mysql_data:/var/lib/mysql
+
+    # 헬스체크 설정
+    healthcheck:
+      # MySQL 상태 확인 명령어
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      # 헬스체크 간격 (30초)
+      interval: 30s
+      # 응답 대기 시간 (10초)
+      timeout: 10s
+      # 재시도 횟수
+      retries: 3
+      # 시작 대기 시간 (40초)
+      start_period: 40s
+
+# 데이터 영속성을 위한 볼륨 정의
+volumes:
+  jusin_mysql_data:
+    driver: local
