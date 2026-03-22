@@ -206,6 +206,8 @@ gradle-app.setting
 task
 result
 
+CLAUDE.md
+
 application.properties
 src/main/resources/schema.sql
 
