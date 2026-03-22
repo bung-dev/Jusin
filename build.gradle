@@ -2,6 +2,7 @@ plugins {
     id 'java'
     id 'org.springframework.boot' version '4.0.4'
     id 'io.spring.dependency-management' version '1.1.7'
+    id 'jacoco'
 }
 
 group = 'com.jusin'
@@ -33,6 +34,41 @@ dependencies {
     testRuntimeOnly 'com.h2database:h2'
 }
 
+bootRun {
+    // .env 파일에서 환경변수 로드
+    def envFile = file('.env')
+    if (envFile.exists()) {
+        envFile.readLines().each { line ->
+            if (line && !line.startsWith('#')) {
+                def idx = line.indexOf('=')
+                if (idx > 0) {
+                    def key = line.substring(0, idx).trim()
+                    def value = line.substring(idx + 1).trim()
+                    environment key, value
+                }
+            }
+        }
+    }
+    // DART API 서버(opendart.fss.or.kr)는 Java 24에서 기본 비활성화된
+    // 레거시 TLS 암호화 스위트를 요구함 → jdk.tls.disabledAlgorithms 완화
+    jvmArgs += ['-Djdk.tls.disabledAlgorithms=SSLv3, TLSv1, TLSv1.1, RC4, DES, MD5withRSA, DH keySize < 1024, EC keySize < 224, anon, NULL']
+}
+
 test {
     useJUnitPlatform()
+    // 테스트 환경에서도 동일한 TLS 설정 적용
+    jvmArgs += ['-Djdk.tls.disabledAlgorithms=SSLv3, TLSv1, TLSv1.1, RC4, DES, MD5withRSA, DH keySize < 1024, EC keySize < 224, anon, NULL']
+}
+
+jacoco {
+    // 0.8.13+: Java 24 (class file version 68) 지원
+    toolVersion = "0.8.13"
+}
+
+jacocoTestReport {
+    dependsOn test
+    reports {
+        html.required = true
+        xml.required = true
+    }
 }
