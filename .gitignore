@@ -206,6 +206,7 @@ gradle-app.setting
 task
 result
 
-application.properties
+src/main/resources/application.properties
+src/main/resources/schema.sql
 
 # End of https://www.toptal.com/developers/gitignore/api/intellij+all,macos,windows,java,gradle
