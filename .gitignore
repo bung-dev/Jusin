@@ -207,8 +207,9 @@ task
 result
 
 CLAUDE.md
+handoff.md
 
 application.properties
 src/main/resources/schema.sql
-
+.env
 # End of https://www.toptal.com/developers/gitignore/api/intellij+all,macos,windows,java,gradle
