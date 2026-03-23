@@ -1,7 +1,9 @@
 package com.jusin.service;
 
+import com.jusin.client.StockPriceClient;
 import com.jusin.domain.entity.FinancialStatement;
 import com.jusin.fixture.FinancialStatementFixture;
+import com.jusin.repository.CompanyRepository;
 import com.jusin.repository.FinancialIndicatorRepository;
 import com.jusin.repository.FinancialStatementRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -27,6 +29,12 @@ class IndicatorCalculationServiceTest {
 
     @Mock
     private FinancialIndicatorRepository indicatorRepository;
+
+    @Mock
+    private StockPriceClient stockPriceClient;
+
+    @Mock
+    private CompanyRepository companyRepository;
 
     @InjectMocks
     private IndicatorCalculationService service;
@@ -96,5 +104,52 @@ class IndicatorCalculationServiceTest {
             () -> assertThat(service.calculateOperatingMargin(null, null)).isNull(),
             () -> assertThat(service.calculateCurrentRatio(null, null)).isNull()
         );
+    }
+
+    @Test
+    @DisplayName("PER 계산 - 주가 66400, EPS 4000 → 16.60")
+    void calculatePer_normal() {
+        BigDecimal per = service.calculatePer(new BigDecimal("66400"), new BigDecimal("4000"));
+        assertThat(per).isEqualByComparingTo(new BigDecimal("16.60"));
+    }
+
+    @Test
+    @DisplayName("PER 계산 - EPS 0이면 null")
+    void calculatePer_zeroEps() {
+        assertThat(service.calculatePer(new BigDecimal("66400"), BigDecimal.ZERO)).isNull();
+    }
+
+    @Test
+    @DisplayName("PER 계산 - EPS 음수이면 null")
+    void calculatePer_negativeEps() {
+        assertThat(service.calculatePer(new BigDecimal("66400"), new BigDecimal("-100"))).isNull();
+    }
+
+    @Test
+    @DisplayName("PER 계산 - 주가 null이면 null")
+    void calculatePer_nullPrice() {
+        assertThat(service.calculatePer(null, new BigDecimal("4000"))).isNull();
+    }
+
+    @Test
+    @DisplayName("PBR 계산 - 주가 66400, 자기자본 100000000000, 발행주수 2700000000 → 정상 계산")
+    void calculatePbr_normal() {
+        BigDecimal pbr = service.calculatePbr(
+                new BigDecimal("66400"),
+                new BigDecimal("100000000000"),
+                2700000000L);
+        assertThat(pbr).isNotNull().isGreaterThan(BigDecimal.ZERO);
+    }
+
+    @Test
+    @DisplayName("PBR 계산 - 주가 null이면 null")
+    void calculatePbr_nullPrice() {
+        assertThat(service.calculatePbr(null, new BigDecimal("100000000000"), 2700000000L)).isNull();
+    }
+
+    @Test
+    @DisplayName("PBR 계산 - 발행주수 0이면 null")
+    void calculatePbr_zeroShareCount() {
+        assertThat(service.calculatePbr(new BigDecimal("66400"), new BigDecimal("100000000000"), 0L)).isNull();
     }
 }

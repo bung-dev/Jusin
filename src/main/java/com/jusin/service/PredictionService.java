@@ -145,6 +145,8 @@ public class PredictionService {
     private Map<String, IndicatorDto> buildIndicatorMap(PredictionResult result,
                                                           FinancialIndicator ind) {
         Map<String, IndicatorDto> map = new HashMap<>();
+        map.put("per",            IndicatorDto.of(ind.getPer(),            result.getPerScore(),            20, evaluateScore(result.getPerScore(),            20)));
+        map.put("pbr",            IndicatorDto.of(ind.getPbr(),            result.getPbrScore(),            10, evaluateScore(result.getPbrScore(),            10)));
         map.put("roe",            IndicatorDto.of(ind.getRoe(),            result.getRoeScore(),            20, evaluateScore(result.getRoeScore(),            20)));
         map.put("debtRatio",      IndicatorDto.of(ind.getDebtRatio(),      result.getDebtRatioScore(),      15, evaluateScore(result.getDebtRatioScore(),      15)));
         map.put("eps",            IndicatorDto.of(ind.getEps(),            result.getEpsGrowthScore(),      15, evaluateScore(result.getEpsGrowthScore(),      15)));
@@ -163,7 +165,6 @@ public class PredictionService {
 
     private List<String> buildNotes(PredictionResult result) {
         return List.of(
-                "PER/PBR은 주가 데이터 미확보로 0점 처리됩니다.",
                 "점수 기준: 80+ 강한상승 / 60+ 약한상승 / 40+ 중립 / 20+ 약한하락 / ~19 강한하락"
         );
     }

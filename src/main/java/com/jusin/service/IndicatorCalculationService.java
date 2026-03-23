@@ -1,8 +1,10 @@
 package com.jusin.service;
 
+import com.jusin.client.StockPriceClient;
 import com.jusin.domain.entity.FinancialIndicator;
 import com.jusin.domain.entity.FinancialStatement;
 import com.jusin.exception.InsufficientDataException;
+import com.jusin.repository.CompanyRepository;
 import com.jusin.repository.FinancialIndicatorRepository;
 import com.jusin.repository.FinancialStatementRepository;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +23,8 @@ public class IndicatorCalculationService {
 
     private final FinancialStatementRepository fsRepository;
     private final FinancialIndicatorRepository indicatorRepository;
+    private final StockPriceClient stockPriceClient;
+    private final CompanyRepository companyRepository;
 
     private static final int SCALE = 2;
     private static final RoundingMode ROUNDING = RoundingMode.HALF_UP;
@@ -32,6 +36,11 @@ public class IndicatorCalculationService {
                 .orElseThrow(() -> new InsufficientDataException(
                         companyId + " / " + period + " 재무제표 없음"));
 
+        String stockCode = companyRepository.findByCompanyId(companyId)
+                .map(com.jusin.domain.entity.Company::getStockCode)
+                .orElse(null);
+        BigDecimal currentPrice = fetchCurrentPriceSafely(stockCode);
+
         String prevPeriod = getPreviousPeriod(period);
         BigDecimal prevEps = fsRepository.findByCompanyIdAndPeriod(companyId, prevPeriod)
                 .map(prev -> calculateEps(prev.getNetIncome(), prev.getShareCount()))
@@ -42,12 +51,12 @@ public class IndicatorCalculationService {
         FinancialIndicator indicator = FinancialIndicator.builder()
                 .companyId(companyId)
                 .period(period)
-                .per(null)
+                .per(calculatePer(currentPrice, currentEps))
                 .roe(calculateRoe(fs.getNetIncome(), fs.getEquity()))
                 .debtRatio(calculateDebtRatio(fs.getTotalLiabilities(), fs.getEquity()))
                 .eps(currentEps)
                 .epsGrowth(calculateEpsGrowth(currentEps, prevEps))
-                .pbr(null)
+                .pbr(calculatePbr(currentPrice, fs.getEquity(), fs.getShareCount()))
                 .operatingMargin(calculateOperatingMargin(fs.getOperatingIncome(), fs.getRevenue()))
                 .currentRatio(calculateCurrentRatio(fs.getCurrentAssets(), fs.getCurrentLiabilities()))
                 .build();
@@ -106,6 +115,28 @@ public class IndicatorCalculationService {
             return null;
         }
         return currentAssets.divide(currentLiabilities, SCALE, ROUNDING);
+    }
+
+    public BigDecimal calculatePer(BigDecimal currentPrice, BigDecimal eps) {
+        if (currentPrice == null || eps == null || eps.compareTo(BigDecimal.ZERO) <= 0) return null;
+        return currentPrice.divide(eps, SCALE, ROUNDING);
+    }
+
+    public BigDecimal calculatePbr(BigDecimal currentPrice, BigDecimal equity, Long shareCount) {
+        if (currentPrice == null || equity == null || shareCount == null || shareCount == 0) return null;
+        BigDecimal bps = equity.divide(BigDecimal.valueOf(shareCount), SCALE, ROUNDING);
+        if (bps.compareTo(BigDecimal.ZERO) <= 0) return null;
+        return currentPrice.divide(bps, SCALE, ROUNDING);
+    }
+
+    private BigDecimal fetchCurrentPriceSafely(String stockCode) {
+        if (stockCode == null) return null;
+        try {
+            return stockPriceClient.getCurrentPrice(stockCode);
+        } catch (Exception e) {
+            log.warn("주가 조회 실패, PER/PBR null 처리: stockCode={}, error={}", stockCode, e.getMessage());
+            return null;
+        }
     }
 
     private String getPreviousPeriod(String period) {
