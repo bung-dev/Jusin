@@ -40,6 +40,28 @@ public class DartApiClient {
                 .block();
     }
 
+    /**
+     * corpCode로 기업 상세 조회 (sector, listDate 등 포함)
+     */
+    public DartCompanyDto getCompanyByCorpCode(String corpCode) {
+        log.debug("DART 기업정보 조회 요청 (corpCode): corpCode={}", corpCode);
+
+        return dartWebClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/company.json")
+                        .queryParam("crtfc_key", apiKey)
+                        .queryParam("corp_code", corpCode)
+                        .build())
+                .retrieve()
+                .onStatus(HttpStatusCode::is4xxClientError, response ->
+                        Mono.error(new ExternalApiException("DART API 클라이언트 오류: " + corpCode)))
+                .onStatus(HttpStatusCode::is5xxServerError, response ->
+                        Mono.error(new ExternalApiException("DART API 서버 오류")))
+                .bodyToMono(DartCompanyDto.class)
+                .doOnNext(dto -> log.debug("DART 기업정보 응답: status={}, corp={}", dto.getStatus(), dto.getCorpName()))
+                .block();
+    }
+
     public DartCompanyDto getCompanyByName(String corpName) {
         log.debug("DART 기업명 검색: name={}", corpName);
 

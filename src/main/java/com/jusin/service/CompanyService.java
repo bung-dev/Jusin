@@ -12,6 +12,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 @Service
@@ -81,10 +83,64 @@ public class CompanyService {
                 });
     }
 
+    @Transactional
     public CompanyDetailResponse getCompanyDetail(String stockCode) {
         Company company = companyRepository.findByStockCode(stockCode)
                 .orElseThrow(() -> new CompanyNotFoundException(stockCode));
+
+        // sector가 없으면 DART API로 enrichment
+        if (company.needsEnrichment()) {
+            try {
+                enrichCompanyDetail(company);
+            } catch (Exception e) {
+                log.warn("기업 상세 enrichment 실패 (기본 정보로 응답): stockCode={}, error={}", stockCode, e.getMessage());
+            }
+        }
+
         return CompanyDetailResponse.from(company);
+    }
+
+    @Transactional
+    public void enrichCompanyDetail(Company company) {
+        DartCompanyDto dto = dartApiClient.getCompanyByCorpCode(company.getCompanyId());
+        if (dto == null || !"000".equals(dto.getStatus())) {
+            log.warn("DART API enrichment 실패: companyId={}", company.getCompanyId());
+            return;
+        }
+
+        LocalDate listDate = null;
+        if (dto.getEstDt() != null && dto.getEstDt().length() == 8) {
+            try {
+                listDate = LocalDate.parse(dto.getEstDt(),
+                        DateTimeFormatter.ofPattern("yyyyMMdd"));
+            } catch (Exception e) {
+                log.debug("설립일 파싱 실패: {}", dto.getEstDt());
+            }
+        }
+
+        String sector = mapIndutyCode(dto.getIndutyCode());
+
+        company.updateDetail(sector, listDate, dto.getCeoNm(),
+                dto.getAdres(), dto.getHmUrl(), dto.getPhnNo());
+
+        log.info("기업 상세 enrichment 완료: companyId={}, sector={}", company.getCompanyId(), sector);
+    }
+
+    private String mapIndutyCode(String indutyCode) {
+        if (indutyCode == null) return null;
+        return switch (indutyCode.substring(0, Math.min(2, indutyCode.length()))) {
+            case "26" -> "반도체/전자부품";
+            case "27" -> "전기/전자";
+            case "30" -> "자동차";
+            case "64", "65", "66" -> "금융";
+            case "72" -> "소프트웨어";
+            case "46" -> "도소매";
+            case "35" -> "전력/가스";
+            case "41", "42" -> "건설";
+            case "10", "11" -> "식품";
+            case "20" -> "화학";
+            default -> "기타";
+        };
     }
 
     private List<CompanySearchResponse> fetchAndSaveFromDart(String query, int limit) {

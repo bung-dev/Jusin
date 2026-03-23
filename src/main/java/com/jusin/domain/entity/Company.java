@@ -78,4 +78,24 @@ public class Company {
         this.representative = representative;
         this.address = address;
     }
+
+    /**
+     * 상세 정보 업데이트 (enrichment용)
+     */
+    public void updateDetail(String sector, LocalDate listDate, String representative,
+                             String address, String website, String phoneNumber) {
+        if (sector != null) this.sector = sector;
+        if (listDate != null) this.listDate = listDate;
+        if (representative != null) this.representative = representative;
+        if (address != null) this.address = address;
+        if (website != null) this.website = website;
+        if (phoneNumber != null) this.phoneNumber = phoneNumber;
+    }
+
+    /**
+     * 상세 정보가 필요한지 확인 (sector가 없으면 enrichment 필요)
+     */
+    public boolean needsEnrichment() {
+        return sector == null || sector.isBlank();
+    }
 }
