@@ -53,7 +53,45 @@ services:
       # 시작 대기 시간 (40초)
       start_period: 40s
 
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: jusin_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - jusin_prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - jusin_network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: jusin_grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - jusin_grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+    networks:
+      - jusin_network
+    depends_on:
+      - prometheus
+
 # 데이터 영속성을 위한 볼륨 정의
 volumes:
   jusin_mysql_data:
     driver: local
+  jusin_prometheus_data:
+    driver: local
+  jusin_grafana_data:
+    driver: local
+
+networks:
+  jusin_network:
+    driver: bridge

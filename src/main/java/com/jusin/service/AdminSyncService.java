@@ -1,7 +1,6 @@
 package com.jusin.service;
 
 import com.jusin.client.DartApiClient;
-import com.jusin.domain.entity.Company;
 import com.jusin.dto.response.CorpCodeSyncResponse;
 import com.jusin.exception.DataProcessingException;
 import com.jusin.parser.CorpCodeXmlParser;
@@ -12,10 +11,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 @Service
 @Slf4j
@@ -49,26 +46,19 @@ public class AdminSyncService {
                 .filter(e -> e.stockCode() != null && e.stockCode().matches("\\d{6}"))
                 .toList();
 
-        // 4. 기존 데이터 upsert (companyId로 조회, 있으면 update, 없으면 신규)
-        int created = 0, updated = 0;
-        List<Company> toSave = new ArrayList<>();
-        for (CorpCodeXmlParser.CorpCodeEntry entry : listedEntries) {
-            Optional<Company> existing = companyRepository.findByCompanyId(entry.corpCode());
-            if (existing.isPresent()) {
-                existing.get().update(entry.corpName(), null, null);
-                toSave.add(existing.get());
-                updated++;
-            } else {
-                toSave.add(Company.builder()
-                        .companyId(entry.corpCode())
-                        .companyName(entry.corpName())
-                        .stockCode(entry.stockCode())
-                        .build());
-                created++;
+        // 4. 기존 데이터 upsert (INSERT ... ON DUPLICATE KEY UPDATE, 배치 크기 500)
+        final int BATCH_SIZE = 500;
+        long startTime = System.currentTimeMillis();
+        int total = listedEntries.size();
+        for (int i = 0; i < total; i += BATCH_SIZE) {
+            List<CorpCodeXmlParser.CorpCodeEntry> batch = listedEntries.subList(i, Math.min(i + BATCH_SIZE, total));
+            for (CorpCodeXmlParser.CorpCodeEntry entry : batch) {
+                companyRepository.upsertCompany(entry.corpCode(), entry.corpName(), entry.stockCode());
             }
+            log.debug("upsert 진행: {}/{}", Math.min(i + BATCH_SIZE, total), total);
         }
-        companyRepository.saveAll(toSave);
-        log.info("corpCode 동기화 완료: 신규={}, 업데이트={}, 전체 상장사={}", created, updated, listedEntries.size());
-        return new CorpCodeSyncResponse(listedEntries.size(), created, updated);
+        long elapsed = System.currentTimeMillis() - startTime;
+        log.info("corpCode 동기화 완료: 전체 상장사={}, 소요시간={}ms", total, elapsed);
+        return new CorpCodeSyncResponse(total, 0, total);
     }
 }
