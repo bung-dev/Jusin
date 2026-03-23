@@ -4,7 +4,9 @@ import com.jusin.client.DartApiRateLimiter;
 import com.jusin.domain.entity.Company;
 import com.jusin.domain.entity.FinancialStatement;
 import com.jusin.domain.enums.SyncType;
+import com.jusin.dto.response.CorpCodeSyncResponse;
 import com.jusin.repository.CompanyRepository;
+import com.jusin.service.AdminSyncService;
 import com.jusin.service.DataSyncLogService;
 import com.jusin.service.FinancialStatementService;
 import jakarta.annotation.PostConstruct;
@@ -24,6 +26,7 @@ public class DartDataSyncScheduler {
     private final FinancialStatementService fsService;
     private final DataSyncLogService syncLogService;
     private final DartApiRateLimiter rateLimiter;
+    private final AdminSyncService adminSyncService;
 
 
     /**
@@ -71,5 +74,22 @@ public class DartDataSyncScheduler {
     @Scheduled(cron = "0 0 2 * * SUN")
     public void syncCompanyInfo() {
         log.info("[스케줄러] 기업 정보 갱신 시작 (대상: {} 개)", companyRepository.count());
+    }
+
+    /**
+     * 매월 1일 오전 2시 - 기업코드 재동기화
+     */
+    @Scheduled(cron = "0 0 2 1 * *")
+    public void scheduleCorpCodeSync() {
+        log.info("[스케줄러] 월간 기업코드 재동기화 시작");
+        try {
+            CorpCodeSyncResponse result = adminSyncService.syncCorpCodes();
+            syncLogService.logSuccess("SYSTEM", SyncType.CORP_CODE_SYNC, result.total());
+            log.info("[스케줄러] 월간 기업코드 재동기화 완료 - total={}, created={}, updated={}",
+                    result.total(), result.created(), result.updated());
+        } catch (Exception e) {
+            syncLogService.logFailure("SYSTEM", SyncType.CORP_CODE_SYNC, e.getMessage());
+            log.error("[스케줄러] 월간 기업코드 재동기화 실패", e);
+        }
     }
 }
