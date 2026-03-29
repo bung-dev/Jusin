@@ -25,4 +25,10 @@ public class PeriodParseUtil {
         int months = parseMonths(period);
         return baseDate.minusMonths(months);
     }
+
+    public static String resolveLatestPeriod() {
+        java.time.YearMonth reportQuarter = java.time.YearMonth.now().minusMonths(3);
+        int rq = (reportQuarter.getMonthValue() - 1) / 3 + 1;
+        return reportQuarter.getYear() + "-Q" + rq;
+    }
 }

@@ -43,12 +43,21 @@ public class PredictionService {
         Optional<PredictionResult> cached = predictionRepository
                 .findByCompanyIdAndPeriod(companyId, period);
         if (cached.isPresent()) {
-            log.debug("예측 결과 캐시 히트: companyId={}, period={}", companyId, period);
-            return buildAnalysisResponse(stockCode, companyId, period, cached.get());
+            PredictionResult pr = cached.get();
+            if (pr.getTotalScore() > 0) {
+                log.debug("예측 결과 캐시 히트: companyId={}, period={}", companyId, period);
+                FinancialIndicator cachedIndicator = indicatorRepository
+                        .findByCompanyIdAndPeriod(companyId, period).orElse(null);
+                return buildAnalysisResponse(stockCode, companyId, period, pr, cachedIndicator);
+            }
+            log.info("캐시 무효화 (score=0): companyId={}, period={}", companyId, period);
+            predictionRepository.delete(pr);
+            predictionRepository.flush();
         }
 
         FinancialIndicator indicator = indicatorRepository
                 .findByCompanyIdAndPeriod(companyId, period)
+                .filter(ind -> !isStaleIndicator(ind))
                 .orElseGet(() -> indicatorService.calculateAndSave(companyId, period));
 
         ScoreBreakdown breakdown = calculateScores(indicator);
@@ -74,7 +83,11 @@ public class PredictionService {
         log.info("예측 결과 저장: companyId={}, period={}, score={}, signal={}",
                 companyId, period, breakdown.totalScore(), signalResult.signal());
 
-        return buildAnalysisResponse(stockCode, companyId, period, result);
+        return buildAnalysisResponse(stockCode, companyId, period, result, indicator);
+    }
+
+    private boolean isStaleIndicator(FinancialIndicator ind) {
+        return ind.getRoe() == null && ind.getEps() == null && ind.getOperatingMargin() == null;
     }
 
     private ScoreBreakdown calculateScores(FinancialIndicator ind) {
@@ -102,7 +115,8 @@ public class PredictionService {
     }
 
     private AnalysisResponse buildAnalysisResponse(String stockCode, String companyId,
-                                                     String period, PredictionResult result) {
+                                                     String period, PredictionResult result,
+                                                     FinancialIndicator indicator) {
         String companyName = companyRepository.findByCompanyId(companyId)
                 .map(Company::getCompanyName)
                 .orElse("알 수 없음");
@@ -119,10 +133,9 @@ public class PredictionService {
                         .build())
                 .orElse(null);
 
-        Map<String, IndicatorDto> indicators = indicatorRepository
-                .findByCompanyIdAndPeriod(companyId, period)
-                .map(ind -> buildIndicatorMap(result, ind))
-                .orElse(new HashMap<>());
+        Map<String, IndicatorDto> indicators = indicator != null
+                ? buildIndicatorMap(result, indicator)
+                : new HashMap<>();
 
         return AnalysisResponse.builder()
                 .companyName(companyName)
@@ -133,12 +146,12 @@ public class PredictionService {
                         .signal(result.getSignal().name())
                         .signalLevel(result.getSignalLevel().name())
                         .score(result.getTotalScore())
-                        .scoreLevel(result.getEmoji())
+                        .scoreLevel(resolveScoreLevel(result))
                         .emoji(result.getEmoji())
                         .build())
                 .indicators(indicators)
                 .financialData(financialData)
-                .notes(buildNotes(result))
+                .notes(SCORE_NOTES)
                 .build();
     }
 
@@ -149,7 +162,8 @@ public class PredictionService {
         map.put("pbr",            IndicatorDto.of(ind.getPbr(),            result.getPbrScore(),            10, evaluateScore(result.getPbrScore(),            10)));
         map.put("roe",            IndicatorDto.of(ind.getRoe(),            result.getRoeScore(),            20, evaluateScore(result.getRoeScore(),            20)));
         map.put("debtRatio",      IndicatorDto.of(ind.getDebtRatio(),      result.getDebtRatioScore(),      15, evaluateScore(result.getDebtRatioScore(),      15)));
-        map.put("eps",            IndicatorDto.of(ind.getEps(),            result.getEpsGrowthScore(),      15, evaluateScore(result.getEpsGrowthScore(),      15)));
+        map.put("eps",            IndicatorDto.of(ind.getEps(),            0,                               0,  "neutral"));
+        map.put("epsGrowth",      IndicatorDto.of(ind.getEpsGrowth(),      result.getEpsGrowthScore(),      15, evaluateScore(result.getEpsGrowthScore(),      15)));
         map.put("operatingMargin",IndicatorDto.of(ind.getOperatingMargin(),result.getOperatingMarginScore(),10, evaluateScore(result.getOperatingMarginScore(),10)));
         map.put("currentRatio",   IndicatorDto.of(ind.getCurrentRatio(),   result.getCurrentRatioScore(),   10, evaluateScore(result.getCurrentRatioScore(),   10)));
         return map;
@@ -163,10 +177,18 @@ public class PredictionService {
         return "불량";
     }
 
-    private List<String> buildNotes(PredictionResult result) {
-        return List.of(
-                "점수 기준: 80+ 강한상승 / 60+ 약한상승 / 40+ 중립 / 20+ 약한하락 / ~19 강한하락"
-        );
+    private static final List<String> SCORE_NOTES = List.of(
+            "점수 기준: 80+ 강한상승 / 60+ 약한상승 / 40+ 중립 / 20+ 약한하락 / ~19 강한하락"
+    );
+
+    private String resolveScoreLevel(PredictionResult result) {
+        Signal signal = result.getSignal();
+        SignalLevel level = result.getSignalLevel();
+        if (signal == Signal.UP && level == SignalLevel.STRONG) return "강한 상승 신호";
+        if (signal == Signal.UP && level == SignalLevel.WEAK)   return "약한 상승 신호";
+        if (signal == Signal.NEUTRAL)                           return "중립 신호";
+        if (signal == Signal.DOWN && level == SignalLevel.WEAK) return "약한 하락 신호";
+        return "강한 하락 신호";
     }
 
     private String formatAmount(BigDecimal amount) {

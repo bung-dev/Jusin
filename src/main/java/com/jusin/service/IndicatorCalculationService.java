@@ -39,14 +39,24 @@ public class IndicatorCalculationService {
         String stockCode = companyRepository.findByCompanyId(companyId)
                 .map(com.jusin.domain.entity.Company::getStockCode)
                 .orElse(null);
-        BigDecimal currentPrice = fetchCurrentPriceSafely(stockCode);
+        StockPriceClient.NaverStockInfo stockInfo = stockCode != null
+                ? getStockInfoSafely(stockCode)
+                : new StockPriceClient.NaverStockInfo(null, null);
+        BigDecimal currentPrice = stockInfo.price();
+
+        Long rawShareCount = fs.getShareCount();
+        if (rawShareCount == null) {
+            rawShareCount = stockInfo.shareCount();
+        }
+        final Long shareCount = rawShareCount;
 
         String prevPeriod = getPreviousPeriod(period);
         BigDecimal prevEps = fsRepository.findByCompanyIdAndPeriod(companyId, prevPeriod)
-                .map(prev -> calculateEps(prev.getNetIncome(), prev.getShareCount()))
+                .map(prev -> calculateEps(prev.getNetIncome(),
+                        prev.getShareCount() != null ? prev.getShareCount() : shareCount))
                 .orElse(null);
 
-        BigDecimal currentEps = calculateEps(fs.getNetIncome(), fs.getShareCount());
+        BigDecimal currentEps = calculateEps(fs.getNetIncome(), shareCount);
 
         FinancialIndicator indicator = FinancialIndicator.builder()
                 .companyId(companyId)
@@ -56,13 +66,16 @@ public class IndicatorCalculationService {
                 .debtRatio(calculateDebtRatio(fs.getTotalLiabilities(), fs.getEquity()))
                 .eps(currentEps)
                 .epsGrowth(calculateEpsGrowth(currentEps, prevEps))
-                .pbr(calculatePbr(currentPrice, fs.getEquity(), fs.getShareCount()))
+                .pbr(calculatePbr(currentPrice, fs.getEquity(), shareCount))
                 .operatingMargin(calculateOperatingMargin(fs.getOperatingIncome(), fs.getRevenue()))
                 .currentRatio(calculateCurrentRatio(fs.getCurrentAssets(), fs.getCurrentLiabilities()))
                 .build();
 
         return indicatorRepository.findByCompanyIdAndPeriod(companyId, period)
-                .map(existing -> indicatorRepository.save(indicator))
+                .map(existing -> {
+                    existing.update(indicator);
+                    return indicatorRepository.save(existing);
+                })
                 .orElseGet(() -> indicatorRepository.save(indicator));
     }
 
@@ -129,13 +142,12 @@ public class IndicatorCalculationService {
         return currentPrice.divide(bps, SCALE, ROUNDING);
     }
 
-    private BigDecimal fetchCurrentPriceSafely(String stockCode) {
-        if (stockCode == null) return null;
+    private StockPriceClient.NaverStockInfo getStockInfoSafely(String stockCode) {
         try {
-            return stockPriceClient.getCurrentPrice(stockCode);
+            return stockPriceClient.getStockInfo(stockCode);
         } catch (Exception e) {
-            log.warn("주가 조회 실패, PER/PBR null 처리: stockCode={}, error={}", stockCode, e.getMessage());
-            return null;
+            log.warn("주가/주식수 조회 실패, PER/PBR/EPS null 처리: stockCode={}, error={}", stockCode, e.getMessage());
+            return new StockPriceClient.NaverStockInfo(null, null);
         }
     }
 

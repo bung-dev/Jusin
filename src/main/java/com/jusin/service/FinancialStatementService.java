@@ -1,6 +1,7 @@
 package com.jusin.service;
 
 import com.jusin.client.DartApiClient;
+import com.jusin.client.StockPriceClient;
 import com.jusin.domain.entity.Company;
 import com.jusin.domain.entity.FinancialStatement;
 import com.jusin.dto.response.ParsedFinancialData;
@@ -17,7 +18,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @Slf4j
@@ -29,6 +32,7 @@ public class FinancialStatementService {
     private final CompanyRepository companyRepository;
     private final DartApiClient dartApiClient;
     private final FinancialJsonParser jsonParser;
+    private final StockPriceClient stockPriceClient;
 
     private static final String ANNUAL_REPORT = "11011";
     private static final String Q1_REPORT     = "11013";
@@ -44,14 +48,16 @@ public class FinancialStatementService {
         List<String> periods = generatePeriods();
         List<FinancialStatement> results = new ArrayList<>();
 
+        Set<String> existingPeriods = new HashSet<>(fsRepository.findExistingPeriods(corpCode, periods));
+
         for (String period : periods) {
-            if (fsRepository.findByCompanyIdAndPeriod(corpCode, period).isPresent()) {
+            if (existingPeriods.contains(period)) {
                 log.debug("캐시 히트: corpCode={}, period={}", corpCode, period);
                 continue;
             }
 
             try {
-                ParsedFinancialData parsed = fetchFromDart(corpCode, period);
+                ParsedFinancialData parsed = fetchFromDart(corpCode, period, stockCode);
                 FinancialStatement saved = saveFinancialStatement(corpCode, period, parsed);
                 results.add(saved);
                 log.info("재무제표 저장 완료: corpCode={}, period={}", corpCode, period);
@@ -63,7 +69,7 @@ public class FinancialStatementService {
         return results;
     }
 
-    private ParsedFinancialData fetchFromDart(String corpCode, String period) {
+    private ParsedFinancialData fetchFromDart(String corpCode, String period, String stockCode) {
         String year       = extractYear(period);
         String reportCode = resolveReportCode(period);
 
@@ -72,6 +78,18 @@ public class FinancialStatementService {
 
         if (!data.isIncomeStatementComplete()) {
             log.warn("JSON 파싱 불완전: corpCode={}, period={}", corpCode, period);
+        }
+
+        if (data.getShareCount() == null && stockCode != null) {
+            try {
+                Long shareCount = stockPriceClient.getShareCount(stockCode);
+                if (shareCount != null) {
+                    data.setShareCount(shareCount);
+                    log.debug("상장주식수 조회 완료: stockCode={}, shareCount={}", stockCode, shareCount);
+                }
+            } catch (Exception e) {
+                log.warn("상장주식수 조회 실패: stockCode={}, error={}", stockCode, e.getMessage());
+            }
         }
 
         return data;
@@ -117,7 +135,7 @@ public class FinancialStatementService {
         List<String> periods = new ArrayList<>();
         YearMonth now = YearMonth.now();
 
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < 8; i++) {
             YearMonth target = now.minusMonths((long) i * 3);
             int year    = target.getYear();
             int quarter = (target.getMonthValue() - 1) / 3 + 1;

@@ -9,6 +9,7 @@ import com.jusin.service.FinancialStatementService;
 import com.jusin.service.PredictionService;
 import com.jusin.service.CompareAnalysisService;
 import com.jusin.service.SignalHistoryService;
+import com.jusin.util.PeriodParseUtil;
 import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,7 +21,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.YearMonth;
 import java.util.List;
 
 @RestController
@@ -46,13 +46,13 @@ public class AnalysisController {
 
         log.info("비교 분석 요청: codes={}", codes);
 
-        String[] codeArray = validateAndParseCodes(codes);
+        List<String> codeArray = validateAndParseCodes(codes);
         List<AnalysisResponse> responses = compareAnalysisService.compareAnalysis(codeArray);
 
         return ResponseEntity.ok(ApiResponse.success(responses));
     }
 
-    private String[] validateAndParseCodes(String codes) {
+    private List<String> validateAndParseCodes(String codes) {
         if (codes == null || codes.isBlank()) {
             throw new IllegalArgumentException("codes 파라미터는 필수입니다.");
         }
@@ -68,7 +68,7 @@ public class AnalysisController {
         if (parts[0].trim().equals(parts[1].trim())) {
             throw new IllegalArgumentException("두 종목코드는 서로 달라야 합니다.");
         }
-        return new String[]{parts[0].trim(), parts[1].trim()};
+        return List.of(parts[0].trim(), parts[1].trim());
     }
 
     /**
@@ -90,7 +90,7 @@ public class AnalysisController {
         fsService.collectAndSave(stockCode);
 
         // 3. 최신 기간 결정
-        String latestPeriod = resolveLatestPeriod();
+        String latestPeriod = PeriodParseUtil.resolveLatestPeriod();
 
         // 4. 예측 결과 (캐시 or 계산)
         AnalysisResponse response = predictionService.analyzeAndPredict(
@@ -111,9 +111,4 @@ public class AnalysisController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
-    private String resolveLatestPeriod() {
-        YearMonth reportQuarter = YearMonth.now().minusMonths(3);
-        int rq = (reportQuarter.getMonthValue() - 1) / 3 + 1;
-        return reportQuarter.getYear() + "-Q" + rq;
-    }
 }

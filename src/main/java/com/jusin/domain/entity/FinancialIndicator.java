@@ -54,4 +54,16 @@ public class FinancialIndicator {
         this.currentRatio = currentRatio;
         this.calculatedAt = LocalDateTime.now();
     }
+
+    public void update(FinancialIndicator other) {
+        this.per = other.per;
+        this.roe = other.roe;
+        this.debtRatio = other.debtRatio;
+        this.eps = other.eps;
+        this.epsGrowth = other.epsGrowth;
+        this.pbr = other.pbr;
+        this.operatingMargin = other.operatingMargin;
+        this.currentRatio = other.currentRatio;
+        this.calculatedAt = LocalDateTime.now();
+    }
 }
