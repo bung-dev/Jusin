@@ -5,9 +5,11 @@ import com.jusin.dto.response.ApiResponse;
 import com.jusin.dto.response.FinancialStatementResponse;
 import com.jusin.exception.InsufficientDataException;
 import com.jusin.service.FinancialStatementService;
+import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -20,6 +22,7 @@ import java.util.List;
 @RequestMapping("/api/v1/companies")
 @RequiredArgsConstructor
 @Slf4j
+@Validated
 public class FinancialStatementController {
 
     private final FinancialStatementService fsService;
@@ -30,7 +33,7 @@ public class FinancialStatementController {
      */
     @GetMapping("/{stockCode}/financial-statements")
     public ResponseEntity<ApiResponse<FinancialStatementResponse>> getFinancialStatement(
-            @PathVariable String stockCode,
+            @PathVariable @Pattern(regexp = "\\d{6}", message = "종목코드는 6자리 숫자여야 합니다.") String stockCode,
             @RequestParam(required = false) String period) {
 
         log.info("재무제표 조회: stockCode={}, period={}", stockCode, period);

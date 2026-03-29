@@ -29,10 +29,10 @@ public class SignalHistoryService {
     private final CompanyRepository companyRepository;
 
     public SignalHistoryResponse getSignalHistory(String stockCode, String period) {
+        if (period == null) period = "1m";
         if (!PeriodParseUtil.isValidPeriod(period)) {
             throw new IllegalArgumentException("period는 1m, 3m, 6m, 1y 중 하나여야 합니다.");
         }
-        if (period == null) period = "1m";
 
         Company company = companyRepository.findByStockCode(stockCode)
                 .orElseThrow(() -> new CompanyNotFoundException(stockCode));

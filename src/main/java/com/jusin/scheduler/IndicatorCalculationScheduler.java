@@ -4,9 +4,10 @@ import com.jusin.domain.entity.FinancialStatement;
 import com.jusin.repository.FinancialIndicatorRepository;
 import com.jusin.repository.FinancialStatementRepository;
 import com.jusin.service.IndicatorCalculationService;
-import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -21,7 +22,7 @@ public class IndicatorCalculationScheduler {
     private final IndicatorCalculationService indicatorService;
     private final FinancialIndicatorRepository indicatorRepository;
 
-    @PostConstruct
+    @EventListener(ApplicationReadyEvent.class)
     public void init() {
         recalculateIndicators();
         recalculatePredictions();

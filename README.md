@@ -1,7 +1,7 @@
-# jusin — 재무제표 기반 주가 예측 REST API
+# jusin — 재무제표 기반 주가 예측 시스템
 
 DART(전자공시시스템) API에서 상장 기업의 재무제표를 수집하고,
-7가지 재무 지표를 자동 계산하여 주가 방향성 신호를 REST API로 제공하는 백엔드 서비스입니다.
+7가지 재무 지표를 자동 계산하여 주가 방향성 신호를 REST API로 제공하는 풀스택 서비스입니다.
 
 ---
 
@@ -13,11 +13,13 @@ DART(전자공시시스템) API에서 상장 기업의 재무제표를 수집하
 4. [API 명세](#4-api-명세)
 5. [스코어링 시스템](#5-스코어링-시스템)
 6. [사전 준비](#6-사전-준비)
-7. [로컬 개발 환경 실행](#7-로컬-개발-환경-실행)
-8. [테스트 실행](#8-테스트-실행)
-9. [프로젝트 구조](#9-프로젝트-구조)
-10. [자동 스케줄러](#10-자동-스케줄러)
-11. [환경변수 참조](#11-환경변수-참조)
+7. [백엔드 실행](#7-백엔드-실행)
+8. [프론트엔드 실행](#8-프론트엔드-실행)
+9. [모니터링](#9-모니터링)
+10. [테스트 실행](#10-테스트-실행)
+11. [프로젝트 구조](#11-프로젝트-구조)
+12. [자동 스케줄러](#12-자동-스케줄러)
+13. [환경변수 참조](#13-환경변수-참조)
 
 ---
 
@@ -33,12 +35,14 @@ DART(전자공시시스템) API에서 상장 기업의 재무제표를 수집하
     → 재무 지표 계산 (ROE, 부채비율, EPS, 영업이익률, 유동비율 등)
     → 100점 만점 스코어링
     → 5단계 신호 판정 (강한상승 🟢 / 약한상승 🟡 / 중립 ⚪ / 약한하락 🟠 / 강한하락 🔴)
-    → REST API 응답
+    → REST API 응답 / Next.js 대시보드 시각화
 ```
 
 ---
 
 ## 2. 기술 스택
+
+### 백엔드
 
 | 구분 | 기술 |
 |------|------|
@@ -49,9 +53,24 @@ DART(전자공시시스템) API에서 상장 기업의 재무제표를 수집하
 | ORM | Spring Data JPA (Hibernate 7) |
 | HTTP 클라이언트 | Spring WebFlux (WebClient) |
 | 스케줄러 | Quartz + Spring Scheduling |
-| XML 파싱 | Java DOM (`javax.xml.parsers`) + Jsoup 1.17.2 |
+| XML 파싱 | Java DOM + Jsoup 1.17.2 |
+| 인증 | Spring Security + JWT (jjwt 0.12.x) |
+| 모니터링 | Actuator + Micrometer + Prometheus + Grafana |
 | 코드 생성 | Lombok |
-| 테스트 | JUnit 5, Mockito, H2 (인메모리), JaCoCo |
+| 테스트 | JUnit 5, Mockito, H2, JaCoCo |
+
+### 프론트엔드
+
+| 구분 | 기술 |
+|------|------|
+| 프레임워크 | Next.js 14 App Router |
+| 언어 | TypeScript (strict) |
+| 스타일링 | Tailwind CSS 3.x |
+| UI | shadcn/ui (Radix UI) |
+| 서버 상태 | TanStack Query v5 |
+| 클라이언트 상태 | Zustand |
+| HTTP | Axios |
+| 차트 | Recharts |
 
 ---
 
@@ -59,37 +78,42 @@ DART(전자공시시스템) API에서 상장 기업의 재무제표를 수집하
 
 ```
 ┌──────────────────────────────────────────────────────┐
-│                  REST API Layer                      │
-│  CompanyController  AnalysisController  FSController │
+│             Next.js 14 프론트엔드 (:3000)              │
+│  메인(검색) / 분석 / 비교 / 히스토리 / 관심종목          │
+└─────────────────────────┬────────────────────────────┘
+                          │ REST API
+┌─────────────────────────▼────────────────────────────┐
+│                  REST API Layer (:8080)               │
+│  CompanyController  AnalysisController  AuthController│
 └─────────────────────────┬────────────────────────────┘
                           │
 ┌─────────────────────────▼────────────────────────────┐
 │                  Service Layer                       │
 │  CompanyService  FinancialStatementService           │
 │  IndicatorCalculationService  PredictionService      │
-│  IndicatorScoreCalculator  DataSyncLogService        │
 └──────────┬────────────────────┬────────────────────┘
            │                    │
 ┌──────────▼──────┐  ┌──────────▼──────────────────────┐
 │  Client Layer   │  │  Parser Layer                   │
 │  DartApiClient  │  │  FinancialXmlParser              │
 │  RateLimiter    │  │  FinancialJsonParser             │
-└──────────┬──────┘  │  ZipExtractor / DartXbrlTag     │
-           │         └─────────────────────────────────┘
+│  StockPriceClient│  │  ZipExtractor / DartXbrlTag    │
+└──────────┬──────┘  └─────────────────────────────────┘
            │
-    DART OpenAPI (외부)
+    DART OpenAPI + Naver Finance (외부)
            │
 ┌──────────▼──────────────────────────────────────────┐
 │                Repository Layer                     │
 │  CompanyRepo  FSRepo  IndicatorRepo  PredictionRepo │
-│  DataSyncLogRepo                                    │
 └──────────┬──────────────────────────────────────────┘
            │
-        MySQL 8.0
-```
+        MySQL 8.0 (:3307)
 
-**레이어 규칙**: controller → service → client/repository / parser는 service에서만 호출
-**외부 HTTP 호출**: service에서 직접 호출 금지, 반드시 client 레이어 경유
+┌──────────────────────────────────────────────────────┐
+│              모니터링 스택                             │
+│  Prometheus (:9090)  →  Grafana (:3001)              │
+└──────────────────────────────────────────────────────┘
+```
 
 ---
 
@@ -101,54 +125,11 @@ DART(전자공시시스템) API에서 상장 기업의 재무제표를 수집하
 GET /api/v1/companies/search?q={검색어}&limit={개수}
 ```
 
-| 파라미터 | 타입 | 필수 | 설명 |
-|---------|------|------|------|
-| q | String | Y | 기업명 검색어 |
-| limit | int | N | 최대 결과 수 (기본값: 10) |
-
-**응답 예시**
-```json
-{
-  "success": true,
-  "count": 2,
-  "data": [
-    {
-      "stockCode": "005930",
-      "companyName": "삼성전자",
-      "corpCode": "00126380",
-      "market": "KOSPI"
-    }
-  ]
-}
-```
-
----
-
 ### 기업 상세 조회
 
 ```
 GET /api/v1/companies/{stockCode}
 ```
-
-| 파라미터 | 타입 | 설명 |
-|---------|------|------|
-| stockCode | String | 6자리 종목코드 (예: 005930) |
-
-**응답 예시**
-```json
-{
-  "success": true,
-  "data": {
-    "stockCode": "005930",
-    "companyName": "삼성전자",
-    "corpCode": "00126380",
-    "representativeName": "한종희",
-    "industry": "전자부품 제조업"
-  }
-}
-```
-
----
 
 ### 재무제표 조회
 
@@ -156,103 +137,65 @@ GET /api/v1/companies/{stockCode}
 GET /api/v1/companies/{stockCode}/financial-statements?period={기간}
 ```
 
-| 파라미터 | 타입 | 설명 |
-|---------|------|------|
-| stockCode | String | 6자리 종목코드 |
-| period | String | 기간 (예: 2025-Q4) — 생략 시 최신 데이터 |
-
-**응답 예시**
-```json
-{
-  "success": true,
-  "data": {
-    "period": "2025-Q4",
-    "revenue": "320000000000000",
-    "operatingIncome": "32000000000000",
-    "netIncome": "28000000000000",
-    "totalAssets": "480000000000000",
-    "equity": "320000000000000",
-    "totalLiabilities": "160000000000000"
-  }
-}
-```
-
----
-
 ### 재무 분석 및 예측
 
 ```
 GET /api/v1/analysis/{stockCode}
 ```
 
-| 파라미터 | 타입 | 설명 |
-|---------|------|------|
-| stockCode | String | 6자리 종목코드 |
+### 기업 비교 분석
 
-기업 조회 → 재무제표 수집 → 지표 계산 → 예측 점수 산출을 모두 자동으로 수행합니다.
-이미 계산된 결과는 DB에서 캐시로 반환합니다.
+```
+GET /api/v1/analysis/compare?codes={code1},{code2}
+```
 
-**응답 예시**
+### 신호 변화 히스토리
+
+```
+GET /api/v1/analysis/{stockCode}/history
+```
+
+### 인증
+
+```
+POST /api/v1/auth/login        — 로그인 (JWT 발급)
+POST /api/v1/auth/refresh      — 토큰 갱신
+```
+
+### 관리자 (ROLE_ADMIN 필요)
+
+```
+GET /api/v1/admin/sync/corp-codes                — 기업코드 전체 동기화
+GET /api/v1/admin/sync/financial/{stockCode}     — 재무제표 수동 수집
+```
+
+### 모니터링
+
+```
+GET /actuator/health       — 헬스 체크
+GET /actuator/prometheus   — Prometheus 메트릭
+```
+
+**분석 응답 예시**:
 ```json
 {
   "success": true,
   "data": {
     "companyName": "삼성전자",
     "stockCode": "005930",
-    "analysisDate": "2026-03-22",
-    "lastDataDate": "2025-Q4",
     "prediction": {
       "signal": "UP",
       "signalLevel": "STRONG",
       "score": 82,
-      "emoji": "🟢",
       "scoreLevel": "강한 상승 신호"
     },
     "indicators": {
-      "roe":            { "value": 18.5,  "score": 20, "maxScore": 20, "evaluation": "우수" },
-      "debtRatio":      { "value": 42.3,  "score": 15, "maxScore": 15, "evaluation": "우수" },
-      "eps":            { "value": 4800,  "score": 15, "maxScore": 15, "evaluation": "우수" },
-      "operatingMargin":{ "value": 14.2,  "score": 8,  "maxScore": 10, "evaluation": "양호" },
-      "currentRatio":   { "value": 1.85,  "score": 10, "maxScore": 10, "evaluation": "우수" }
-    },
-    "financialData": {
-      "period": "2025-Q4",
-      "revenue": "320000000000000",
-      "operatingIncome": "32000000000000",
-      "netIncome": "28000000000000",
-      "totalAssets": "480000000000000",
-      "equity": "320000000000000"
-    },
-    "notes": [
-      "PER/PBR은 주가 데이터 미확보로 0점 처리됩니다.",
-      "점수 기준: 80+ 강한상승 / 60+ 약한상승 / 40+ 중립 / 20+ 약한하락 / ~19 강한하락"
-    ]
+      "roe":            { "value": 18.5, "score": 20, "evaluation": "우수" },
+      "debtRatio":      { "value": 42.3, "score": 15, "evaluation": "우수" }
+    }
   }
 }
 ```
-
----
-
-### 오류 응답 형식
-
-모든 오류는 일관된 형식으로 반환됩니다.
-
-```json
-{
-  "status": 404,
-  "code": "COMPANY_NOT_FOUND",
-  "message": "기업을 찾을 수 없습니다: 999999",
-  "timestamp": "2026-03-22T10:30:00"
-}
-```
-
-| HTTP 상태 | 코드 | 설명 |
-|----------|------|------|
-| 400 | INSUFFICIENT_DATA | 재무 데이터 부족 |
-| 400 | VALIDATION_ERROR | 요청 파라미터 검증 실패 |
-| 404 | COMPANY_NOT_FOUND | 기업 없음 |
-| 500 | DATA_PROCESSING_ERROR | 파싱/계산 실패 |
-| 503 | EXTERNAL_API_ERROR | DART API 호출 실패 |
 
 ---
 
@@ -272,7 +215,7 @@ GET /api/v1/analysis/{stockCode}
 
 **신호 판정 기준**
 
-| 점수 | 신호 | 등급 | 이모지 |
+| 점수 | 신호 | 등급 | 표시 |
 |------|------|------|------|
 | 80점 이상 | UP | STRONG | 🟢 강한 상승 신호 |
 | 60~79점 | UP | WEAK | 🟡 약한 상승 신호 |
@@ -280,58 +223,28 @@ GET /api/v1/analysis/{stockCode}
 | 20~39점 | DOWN | WEAK | 🟠 약한 하락 신호 |
 | 0~19점 | DOWN | STRONG | 🔴 강한 하락 신호 |
 
-> PER/PBR은 실시간 주가 데이터가 필요하므로 현재 버전에서는 0점 처리됩니다.
-
 ---
 
 ## 6. 사전 준비
 
-### 필수 요건
-
 - Java 24 이상
-- Docker (MySQL 로컬 환경용)
+- Node.js 18 이상 (프론트엔드)
+- Docker (MySQL / Prometheus / Grafana)
 - DART API 키 ([DART 개발자센터](https://opendart.fss.or.kr) 발급)
-
-### DART API 키 발급
-
-1. [DART 개발자센터](https://opendart.fss.or.kr/intro/main.do) 접속
-2. 회원가입 후 API 인증키 신청
-3. 발급받은 키를 환경변수 `DART_API_KEY`에 설정
 
 ---
 
-## 7. 로컬 개발 환경 실행
+## 7. 백엔드 실행
 
-### Step 1 — 저장소 클론
-
-```bash
-git clone https://github.com/your-org/jusin.git
-cd jusin
-```
-
-### Step 2 — MySQL 컨테이너 시작
+### Step 1 — MySQL 컨테이너 시작
 
 ```bash
-docker compose up -d
+docker compose up -d mysql
 ```
 
-컨테이너가 기동되면 `localhost:3307`에 MySQL 8.0이 실행됩니다.
+### Step 2 — 환경변수 설정
 
-| 항목 | 값 |
-|------|-----|
-| 호스트 | localhost |
-| 포트 | 3307 |
-| 데이터베이스 | jusin |
-| 사용자 | jusin |
-| 비밀번호 | jusinpass |
-
-### Step 3 — 환경변수 파일 설정
-
-```bash
-cp .env.example .env
-```
-
-`.env` 파일을 열어 값을 채워 넣습니다.
+`.env` 파일 생성 (`.env.example` 참고):
 
 ```dotenv
 DB_URL=jdbc:mysql://localhost:3307/jusin?useSSL=false&serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true
@@ -340,179 +253,136 @@ DB_PASSWORD=jusinpass
 DART_API_KEY=발급받은_키를_여기에_입력
 ```
 
-### Step 4 — application.properties 설정
+### Step 3 — application.properties 설정
+
+`src/main/resources/application.properties` 파일을 직접 생성합니다 (CLAUDE.md 참고).
+
+### Step 4 — DB 스키마 적용
 
 ```bash
-cp src/main/resources/application.properties.example src/main/resources/application.properties
-```
-
-> `application.properties`는 `.gitignore`에 등록되어 있어 커밋되지 않습니다.
-
-### Step 5 — DB 스키마 적용
-
-MySQL에 스키마를 직접 실행합니다 (`ddl-auto=validate` 사용).
-
-```bash
-# docker exec으로 MySQL에 접속하여 스키마 적용
 docker exec -i jusin_mysql mysql -ujusin -pjusinpass jusin < src/main/resources/schema.sql
 ```
 
-또는 MySQL 클라이언트(DBeaver 등)에서 `src/main/resources/schema.sql` 파일을 직접 실행합니다.
-
-### Step 6 — 서버 실행
+### Step 5 — 서버 실행
 
 ```bash
 ./gradlew bootRun
 ```
 
-서버가 기동되면 `http://localhost:8080`에서 API를 사용할 수 있습니다.
+http://localhost:8080 에서 API 사용 가능.
 
 ### 빠른 동작 확인
 
 ```bash
-# 삼성전자 분석 요청 (최초 실행 시 DART API 호출 발생)
-curl http://localhost:8080/api/v1/analysis/005930
-
-# 기업 검색
+curl http://localhost:8080/actuator/health
 curl "http://localhost:8080/api/v1/companies/search?q=삼성"
-
-# 재무제표 조회
-curl "http://localhost:8080/api/v1/companies/005930/financial-statements?period=2025-Q4"
+curl http://localhost:8080/api/v1/analysis/005930
 ```
 
 ---
 
-## 8. 테스트 실행
+## 8. 프론트엔드 실행
 
-### 단위/통합 테스트 실행
-
-테스트는 H2 인메모리 DB를 사용하므로 MySQL 없이도 실행됩니다.
+> 상세 내용: `docs/frontend-start.md`
 
 ```bash
+cd C:/github/jusin-web
+npm install      # 최초 1회
+npm run dev      # http://localhost:3000
+```
+
+`.env.local`:
+```dotenv
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
+```
+
+---
+
+## 9. 모니터링
+
+> 상세 내용: `docs/monitoring-guide.md`
+
+```bash
+# Prometheus + Grafana 기동
+docker compose up -d prometheus grafana
+```
+
+| 서비스 | 주소 | 계정 |
+|--------|------|------|
+| Prometheus | http://localhost:9090 | — |
+| Grafana | http://localhost:3001 | admin / admin |
+
+Grafana에서 대시보드 ID `4701` (JVM Micrometer) 또는 `6756` (Spring Boot Statistics)을 가져오면 바로 시각화됩니다.
+
+---
+
+## 10. 테스트 실행
+
+```bash
+# 전체 테스트 (H2 인메모리, MySQL 불필요)
 ./gradlew test
-```
 
-### 커버리지 리포트 생성
-
-```bash
+# 커버리지 리포트
 ./gradlew test jacocoTestReport
+# → build/reports/jacoco/test/html/index.html
 ```
 
-리포트 위치: `build/reports/jacoco/test/html/index.html`
-
-### 테스트 구성
-
-| 테스트 클래스 | 종류 | 테스트 수 |
-|-------------|------|---------|
-| `IndicatorCalculationServiceTest` | 단위 | 8개 |
-| `IndicatorScoreCalculatorTest` | 파라미터화 단위 | 19개 |
-| `FinancialXmlParserTest` | 단위 | 2개 |
-| `AnalysisControllerIntegrationTest` | 통합 | 5개 |
-| **합계** | | **34개** |
+**테스트 현황**: 53개 통과
 
 ---
 
-## 9. 프로젝트 구조
+## 11. 프로젝트 구조
 
 ```
 jusin/
-├── src/
-│   ├── main/
-│   │   ├── java/com/jusin/
-│   │   │   ├── JusinApplication.java          # 진입점 (@EnableScheduling, @EnableJpaAuditing)
-│   │   │   ├── config/
-│   │   │   │   ├── AppConfig.java             # WebClient Bean 설정 (timeout 30초)
-│   │   │   │   ├── SchedulerConfig.java       # Quartz 스케줄러 설정
-│   │   │   │   └── RequestLoggingFilter.java  # 요청/응답 로깅 필터 (MDC requestId)
-│   │   │   ├── domain/
-│   │   │   │   ├── entity/                    # JPA 엔티티 5개
-│   │   │   │   │   ├── Company.java           # 기업 정보
-│   │   │   │   │   ├── FinancialStatement.java # 재무제표
-│   │   │   │   │   ├── FinancialIndicator.java # 재무 지표
-│   │   │   │   │   ├── PredictionResult.java  # 예측 결과
-│   │   │   │   │   └── DataSyncLog.java       # 동기화 이력
-│   │   │   │   └── enums/
-│   │   │   │       ├── Signal.java            # UP / DOWN / NEUTRAL
-│   │   │   │       ├── SignalLevel.java        # STRONG / WEAK / NEUTRAL
-│   │   │   │       ├── SyncStatus.java        # SUCCESS / FAILED / IN_PROGRESS
-│   │   │   │       └── SyncType.java          # COMPANY / FINANCIAL / INDICATOR
-│   │   │   ├── repository/                    # Spring Data JPA Repository
-│   │   │   ├── client/
-│   │   │   │   ├── DartApiClient.java         # DART API WebClient (비동기)
-│   │   │   │   └── DartApiRateLimiter.java    # 일일 9,000건 호출 제한
-│   │   │   ├── parser/
-│   │   │   │   ├── FinancialXmlParser.java    # XBRL XML DOM 파싱
-│   │   │   │   ├── FinancialJsonParser.java   # 재무 JSON 파싱 (Jackson 3.x)
-│   │   │   │   ├── ZipExtractor.java          # DART ZIP 파일 EUC-KR 압축 해제
-│   │   │   │   └── DartXbrlTag.java           # XBRL 태그 상수 (IFRS/DART/US-GAAP)
-│   │   │   ├── service/
-│   │   │   │   ├── CompanyService.java        # 기업 조회 (DB 우선, DART 폴백)
-│   │   │   │   ├── FinancialStatementService.java # 재무제표 수집 및 저장
-│   │   │   │   ├── IndicatorCalculationService.java # 재무 지표 계산
-│   │   │   │   ├── IndicatorScoreCalculator.java   # 100점 스코어링
-│   │   │   │   ├── IndicatorValidator.java    # 이상치 경고 로깅
-│   │   │   │   ├── PredictionService.java     # 예측 결과 생성 (캐시 우선)
-│   │   │   │   └── DataSyncLogService.java    # 동기화 이력 기록
-│   │   │   ├── controller/
-│   │   │   │   ├── CompanyController.java     # GET /api/v1/companies
-│   │   │   │   ├── FinancialStatementController.java # GET /api/v1/companies/{code}/financial-statements
-│   │   │   │   ├── AnalysisController.java    # GET /api/v1/analysis/{stockCode}
-│   │   │   │   └── GlobalExceptionHandler.java # @RestControllerAdvice 전역 예외 처리
-│   │   │   ├── exception/
-│   │   │   │   ├── JusinException.java        # 추상 기반 예외 (errorCode + HttpStatus)
-│   │   │   │   ├── CompanyNotFoundException.java  # 404
-│   │   │   │   ├── InsufficientDataException.java # 400
-│   │   │   │   ├── ExternalApiException.java  # 503
-│   │   │   │   └── DataProcessingException.java   # 500
-│   │   │   ├── scheduler/
-│   │   │   │   ├── DartDataSyncScheduler.java      # 매일 06:00 재무제표 수집
-│   │   │   │   └── IndicatorCalculationScheduler.java # 매일 07:00 지표 계산, 07:30 예측
-│   │   │   └── dto/
-│   │   │       ├── request/                   # 요청 DTO
-│   │   │       └── response/                  # 응답 DTO
-│   │   └── resources/
-│   │       ├── application.properties.example # 설정 템플릿 (이것을 복사해 사용)
-│   │       ├── schema.sql                     # DB DDL (gitignore됨, 직접 실행 필요)
-│   │       └── logback-spring.xml             # 로그 설정 (콘솔+파일, 30일 보관)
-│   └── test/
-│       ├── java/com/jusin/
-│       │   ├── fixture/                       # 테스트 픽스처 (Company, FS, DartApi)
-│       │   ├── service/                       # 서비스 단위 테스트
-│       │   ├── parser/                        # 파서 단위 테스트
-│       │   └── integration/                   # 컨트롤러 통합 테스트
-│       └── resources/
-│           └── application.properties         # H2 인메모리 테스트 DB 설정
-├── .env.example                               # 환경변수 템플릿
-├── docker-compose.yml                         # MySQL 8.0 로컬 환경
-├── build.gradle                               # Gradle 빌드 설정
-└── AGENTS.md                                  # 에이전트 협업 가이드
+├── src/main/java/com/jusin/
+│   ├── config/            — AppConfig, SecurityConfig, SchedulerConfig
+│   ├── domain/entity/     — Company, FinancialStatement, FinancialIndicator, PredictionResult, DataSyncLog, User
+│   ├── domain/enums/      — Signal, SignalLevel, SyncStatus, SyncType, UserRole
+│   ├── repository/        — Spring Data JPA Repositories
+│   ├── client/            — DartApiClient, DartApiRateLimiter, StockPriceClient
+│   ├── parser/            — FinancialXmlParser, FinancialJsonParser, ZipExtractor
+│   ├── service/           — CompanyService, IndicatorCalculationService, PredictionService 등
+│   ├── security/          — JwtTokenProvider, JwtAuthenticationFilter
+│   ├── controller/        — CompanyController, AnalysisController, AuthController, AdminController
+│   ├── scheduler/         — DartDataSyncScheduler, IndicatorCalculationScheduler
+│   ├── exception/         — JusinException, CompanyNotFoundException 등
+│   └── dto/               — 요청/응답 DTO
+├── monitoring/
+│   ├── prometheus.yml     — Prometheus 스크랩 설정
+│   └── grafana/           — Grafana 자동 프로비저닝 설정
+├── docs/
+│   ├── monitoring-guide.md    — Prometheus/Grafana 사용법
+│   └── frontend-start.md     — 프론트엔드 시작 가이드
+├── task/
+│   ├── backend/           — 백엔드 태스크 명세 및 결과 보고서
+│   └── frontend/          — 프론트엔드 태스크 명세 및 결과 보고서
+├── docker-compose.yml     — MySQL + Prometheus + Grafana
+├── build.gradle
+└── CLAUDE.md              — AI 에이전트 가이드
 ```
 
 ---
 
-## 10. 자동 스케줄러
-
-서버가 실행 중일 때 아래 작업이 자동으로 수행됩니다.
+## 12. 자동 스케줄러
 
 | 시각 | 스케줄러 | 작업 |
 |------|---------|------|
-| 매일 06:00 | `DartDataSyncScheduler` | DART API에서 재무제표 수집 및 저장 (일일 9,000건 제한 체크) |
-| 매일 07:00 | `IndicatorCalculationScheduler` | 신규 재무제표에 대한 지표 재계산 |
+| 매일 06:00 | `DartDataSyncScheduler` | DART API에서 재무제표 수집 (일일 9,000건 제한) |
+| 매일 07:00 | `IndicatorCalculationScheduler` | 신규 재무제표 지표 재계산 |
 | 매일 07:30 | `IndicatorCalculationScheduler` | 지표 기반 예측 신호 업데이트 |
-
-> `spring.quartz.auto-startup=false`로 설정 시 스케줄러가 자동 시작되지 않습니다.
-> 로컬 개발 중 불필요한 DART API 호출을 방지하려면 이 값을 유지하세요.
+| 매월 1일 02:00 | `DartDataSyncScheduler` | 전체 기업코드 재동기화 |
 
 ---
 
-## 11. 환경변수 참조
+## 13. 환경변수 참조
 
-| 변수명 | 필수 | 기본값 | 설명 |
-|--------|------|--------|------|
-| `DB_URL` | N | `jdbc:mysql://localhost:3306/jusin?...` | MySQL JDBC URL |
-| `DB_USERNAME` | Y | — | DB 사용자명 |
-| `DB_PASSWORD` | Y | — | DB 비밀번호 |
-| `DART_API_KEY` | Y | — | DART OpenAPI 인증키 |
+| 변수명 | 필수 | 설명 |
+|--------|------|------|
+| `DB_URL` | Y | MySQL JDBC URL |
+| `DB_USERNAME` | Y | DB 사용자명 |
+| `DB_PASSWORD` | Y | DB 비밀번호 |
+| `DART_API_KEY` | Y | DART OpenAPI 인증키 |
 
 > `application.properties`와 `schema.sql`은 `.gitignore`에 등록되어 있습니다. 절대 커밋하지 마십시오.
 

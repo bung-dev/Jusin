@@ -4,6 +4,9 @@ import com.jusin.dto.response.ApiResponse;
 import com.jusin.dto.response.CompanyDetailResponse;
 import com.jusin.dto.response.CompanySearchResponse;
 import com.jusin.service.CompanyService;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,8 +27,8 @@ public class CompanyController {
 
     @GetMapping("/search")
     public ResponseEntity<ApiResponse<List<CompanySearchResponse>>> search(
-            @RequestParam String q,
-            @RequestParam(defaultValue = "10") int limit) {
+            @RequestParam @NotBlank(message = "검색어를 입력해주세요.") String q,
+            @RequestParam(defaultValue = "10") @Min(1) @Max(100) int limit) {
 
         log.info("기업 검색 요청: q={}, limit={}", q, limit);
         List<CompanySearchResponse> results = companyService.search(q, limit);

@@ -1,5 +1,6 @@
 package com.jusin.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.jusin.domain.entity.Company;
 import lombok.Builder;
 import lombok.Getter;
@@ -15,12 +16,15 @@ public class CompanyDetailResponse {
     private String companyName;
     private String stockCode;
     private String sector;
+    @JsonProperty("listingDate")
     private LocalDate listDate;
+    @JsonProperty("ceo")
     private String representative;
     private String address;
     private String website;
     private String phoneNumber;
     private LocalDateTime lastUpdatedDate;
+    private String corpCode;
 
     public static CompanyDetailResponse from(Company company) {
         return CompanyDetailResponse.builder()
@@ -34,6 +38,7 @@ public class CompanyDetailResponse {
                 .website(company.getWebsite())
                 .phoneNumber(company.getPhoneNumber())
                 .lastUpdatedDate(company.getUpdatedAt())
+                .corpCode(company.getCompanyId())
                 .build();
     }
 }

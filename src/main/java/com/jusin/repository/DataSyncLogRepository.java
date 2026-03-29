@@ -6,5 +6,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 
 public interface DataSyncLogRepository extends JpaRepository<DataSyncLog, Long> {
-    List<DataSyncLog> findByCompanyIdOrderByIdDesc(String companyId);
+    List<DataSyncLog> findByCompanyIdOrderBySyncedAtDesc(String companyId);
 }

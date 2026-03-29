@@ -18,15 +18,22 @@ public class FinancialJsonParser {
 
     private final ObjectMapper objectMapper;
 
-    private static final Map<String, String> ACCOUNT_MAPPING = Map.of(
-            "매출액", "revenue",
-            "영업이익", "operatingIncome",
-            "당기순이익", "netIncome",
-            "자산총계", "totalAssets",
-            "부채총계", "totalLiabilities",
-            "자본총계", "equity",
-            "유동자산", "currentAssets",
-            "유동부채", "currentLiabilities"
+    private static final Map<String, String> ACCOUNT_MAPPING = Map.ofEntries(
+            Map.entry("매출액", "revenue"),
+            Map.entry("영업수익", "revenue"),
+            Map.entry("영업이익", "operatingIncome"),
+            Map.entry("영업이익(손실)", "operatingIncome"),
+            Map.entry("당기순이익", "netIncome"),
+            Map.entry("당기순이익(손실)", "netIncome"),
+            Map.entry("분기순이익", "netIncome"),
+            Map.entry("분기순이익(손실)", "netIncome"),
+            Map.entry("반기순이익", "netIncome"),
+            Map.entry("반기순이익(손실)", "netIncome"),
+            Map.entry("자산총계", "totalAssets"),
+            Map.entry("부채총계", "totalLiabilities"),
+            Map.entry("자본총계", "equity"),
+            Map.entry("유동자산", "currentAssets"),
+            Map.entry("유동부채", "currentLiabilities")
     );
 
     public ParsedFinancialData parseJsonResponse(String jsonResponse, String period) {
@@ -39,13 +46,18 @@ public class FinancialJsonParser {
 
             if (list != null && list.isArray()) {
                 for (JsonNode item : list) {
-                    String accountNm = item.get("account_nm").asText();
-                    String amount = item.get("thstrm_amount").asText();
+                    JsonNode accountNode = item.get("account_nm");
+                    JsonNode amountNode = item.get("thstrm_amount");
+                    if (accountNode == null || amountNode == null) continue;
+                    String accountNm = accountNode.asText();
+                    String amount = amountNode.asText();
 
                     String field = ACCOUNT_MAPPING.get(accountNm);
-                    if (field != null && !amount.isEmpty() && !amount.equals("-")) {
-                        BigDecimal value = new BigDecimal(amount.replace(",", ""));
-                        setField(data, field, value);
+                    if (field != null) {
+                        BigDecimal value = parseAmount(amount);
+                        if (value != null) {
+                            setField(data, field, value);
+                        }
                     }
                 }
             }
@@ -54,6 +66,20 @@ public class FinancialJsonParser {
         } catch (Exception e) {
             log.error("JSON 파싱 오류: {}", e.getMessage());
             throw new DataProcessingException("재무제표 JSON 파싱 실패");
+        }
+    }
+
+    private BigDecimal parseAmount(String amount) {
+        if (amount == null || amount.isBlank() || amount.equals("-")) return null;
+        String cleaned = amount.replace(",", "").trim();
+        if (cleaned.startsWith("(") && cleaned.endsWith(")")) {
+            cleaned = "-" + cleaned.substring(1, cleaned.length() - 1);
+        }
+        try {
+            return new BigDecimal(cleaned);
+        } catch (NumberFormatException e) {
+            log.warn("금액 파싱 실패: '{}'", amount);
+            return null;
         }
     }
 
