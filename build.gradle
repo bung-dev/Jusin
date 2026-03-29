@@ -70,8 +70,9 @@ test {
     // 테스트 환경에서도 동일한 TLS 설정 적용
     jvmArgs += ['-Djdk.tls.disabledAlgorithms=SSLv3, TLSv1, TLSv1.1, RC4, DES, MD5withRSA, DH keySize < 1024, EC keySize < 224, anon, NULL']
     // JaCoCo + Gradle Daemon + Windows 파일 잠금 문제 회피
+    // CI 환경변수가 있으면 JaCoCo 활성화, 로컬 개발환경에서는 비활성화
     jacoco {
-        enabled = false
+        enabled = System.getenv('CI') != null
     }
 }
 

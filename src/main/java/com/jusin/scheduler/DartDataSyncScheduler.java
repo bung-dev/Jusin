@@ -70,9 +70,12 @@ public class DartDataSyncScheduler {
 
     /**
      * 매주 일요일 오전 2시 - 기업 정보 갱신
+     * TODO: 기업 정보 갱신 미구현 — 구현 완료 전까지 비활성화
      */
-    @Scheduled(cron = "0 0 2 * * SUN")
+    // TODO: DART company.json API로 전체 기업 정보 갱신 구현 예정
+    // @Scheduled(cron = "0 0 2 * * SUN")
     public void syncCompanyInfo() {
+        // TODO: DART company.json API로 전체 기업 정보 갱신 구현 예정
         log.info("[스케줄러] 기업 정보 갱신 시작 (대상: {} 개)", companyRepository.count());
     }
 
@@ -84,11 +87,11 @@ public class DartDataSyncScheduler {
         log.info("[스케줄러] 월간 기업코드 재동기화 시작");
         try {
             CorpCodeSyncResponse result = adminSyncService.syncCorpCodes();
-            syncLogService.logSuccess("SYSTEM", SyncType.CORP_CODE_SYNC, result.total());
+            syncLogService.logSuccess("SYSTEM", SyncType.CORP_CODE, result.total());
             log.info("[스케줄러] 월간 기업코드 재동기화 완료 - total={}, created={}, updated={}",
                     result.total(), result.created(), result.updated());
         } catch (Exception e) {
-            syncLogService.logFailure("SYSTEM", SyncType.CORP_CODE_SYNC, e.getMessage());
+            syncLogService.logFailure("SYSTEM", SyncType.CORP_CODE, e.getMessage());
             log.error("[스케줄러] 월간 기업코드 재동기화 실패", e);
         }
     }
