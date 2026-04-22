@@ -6,14 +6,14 @@ import com.jusin.util.PeriodParseUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 
 @Service
 @Slf4j
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class CompareAnalysisService {
 
     private final CompanyService companyService;
@@ -28,10 +28,19 @@ public class CompareAnalysisService {
     public List<AnalysisResponse> compareAnalysis(List<String> codes) {
         String period = PeriodParseUtil.resolveLatestPeriod();
 
-        return List.of(
-                analyzeOne(codes.get(0), period),
-                analyzeOne(codes.get(1), period)
-        );
+        CompletableFuture<AnalysisResponse> future0 =
+                CompletableFuture.supplyAsync(() -> analyzeOne(codes.get(0), period));
+        CompletableFuture<AnalysisResponse> future1 =
+                CompletableFuture.supplyAsync(() -> analyzeOne(codes.get(1), period));
+
+        try {
+            return List.of(future0.get(), future1.get());
+        } catch (ExecutionException e) {
+            throw new RuntimeException(e.getCause());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(e);
+        }
     }
 
     private AnalysisResponse analyzeOne(String stockCode, String period) {
