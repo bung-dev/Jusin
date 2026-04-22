@@ -3,6 +3,8 @@ package com.jusin.service;
 import com.jusin.domain.entity.Company;
 import com.jusin.domain.entity.PredictionResult;
 import com.jusin.domain.enums.Signal;
+import com.jusin.dto.response.QuarterlyHistoryItemDto;
+import com.jusin.dto.response.QuarterlyHistoryResponse;
 import com.jusin.dto.response.SignalHistoryItemDto;
 import com.jusin.dto.response.SignalHistoryResponse;
 import com.jusin.exception.CompanyNotFoundException;
@@ -59,6 +61,36 @@ public class SignalHistoryService {
             Signal previousSignal = (i + 1 < results.size()) ? results.get(i + 1).getSignal() : null;
             Boolean isChanged = previousSignal != null && !current.getSignal().equals(previousSignal);
             items.add(SignalHistoryItemDto.from(current, isChanged, isChanged ? previousSignal : null));
+        }
+        return items;
+    }
+
+    public QuarterlyHistoryResponse getQuarterlyHistory(String stockCode, int quarters) {
+        if (quarters < 1 || quarters > 8) {
+            throw new IllegalArgumentException("quarters는 1 이상 8 이하여야 합니다.");
+        }
+
+        Company company = companyRepository.findByStockCode(stockCode)
+                .orElseThrow(() -> new CompanyNotFoundException(stockCode));
+
+        List<PredictionResult> results = predictionRepository
+                .findByCompanyIdOrderByPeriodDesc(company.getCompanyId())
+                .stream()
+                .limit(quarters)
+                .toList();
+
+        List<QuarterlyHistoryItemDto> items = buildQuarterlyItems(results);
+
+        return QuarterlyHistoryResponse.of(stockCode, company.getCompanyName(), quarters, items);
+    }
+
+    private List<QuarterlyHistoryItemDto> buildQuarterlyItems(List<PredictionResult> results) {
+        List<QuarterlyHistoryItemDto> items = new ArrayList<>();
+        for (int i = 0; i < results.size(); i++) {
+            PredictionResult current = results.get(i);
+            Signal previousSignal = (i + 1 < results.size()) ? results.get(i + 1).getSignal() : null;
+            Boolean isChanged = previousSignal != null && !current.getSignal().equals(previousSignal);
+            items.add(QuarterlyHistoryItemDto.from(current, isChanged, isChanged ? previousSignal : null));
         }
         return items;
     }

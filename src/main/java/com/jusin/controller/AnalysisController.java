@@ -3,6 +3,7 @@ package com.jusin.controller;
 import com.jusin.domain.entity.Company;
 import com.jusin.dto.response.AnalysisResponse;
 import com.jusin.dto.response.ApiResponse;
+import com.jusin.dto.response.QuarterlyHistoryResponse;
 import com.jusin.dto.response.SignalHistoryResponse;
 import com.jusin.service.CompanyService;
 import com.jusin.service.FinancialStatementService;
@@ -108,6 +109,18 @@ public class AnalysisController {
 
         log.info("신호 이력 조회 요청: stockCode={}, period={}", stockCode, period);
         SignalHistoryResponse response = signalHistoryService.getSignalHistory(stockCode, period);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @GetMapping("/{stockCode}/quarterly")
+    public ResponseEntity<ApiResponse<QuarterlyHistoryResponse>> getQuarterlyHistory(
+            @PathVariable
+            @Pattern(regexp = "\\d{6}", message = "종목코드는 6자리 숫자여야 합니다.")
+            String stockCode,
+            @RequestParam(defaultValue = "8") int quarters) {
+
+        log.info("분기별 히스토리 조회 요청: stockCode={}, quarters={}", stockCode, quarters);
+        QuarterlyHistoryResponse response = signalHistoryService.getQuarterlyHistory(stockCode, quarters);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
