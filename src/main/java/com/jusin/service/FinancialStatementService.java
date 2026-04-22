@@ -131,6 +131,48 @@ public class FinancialStatementService {
                         "기간 " + period + "의 재무제표 데이터가 없습니다."));
     }
 
+    @Transactional
+    public List<FinancialStatement> collectHistorical(String stockCode, int quarters) {
+        Company company = companyRepository.findByStockCode(stockCode)
+                .orElseThrow(() -> new CompanyNotFoundException(stockCode));
+
+        String corpCode = company.getCompanyId();
+        List<String> periods = generateRecentQuarters(Math.min(quarters, 8));
+        List<FinancialStatement> results = new ArrayList<>();
+
+        Set<String> existingPeriods = new HashSet<>(fsRepository.findExistingPeriods(corpCode, periods));
+
+        for (String period : periods) {
+            if (existingPeriods.contains(period)) {
+                log.debug("소급 수집 건너뜀 (이미 존재): corpCode={}, period={}", corpCode, period);
+                continue;
+            }
+            try {
+                ParsedFinancialData parsed = fetchFromDart(corpCode, period, stockCode);
+                FinancialStatement saved = saveFinancialStatement(corpCode, period, parsed);
+                results.add(saved);
+                log.info("소급 수집 완료: corpCode={}, period={}", corpCode, period);
+            } catch (Exception e) {
+                log.warn("소급 수집 실패 (건너뜀): corpCode={}, period={}, error={}",
+                        corpCode, period, e.getMessage());
+            }
+        }
+
+        return results;
+    }
+
+    private List<String> generateRecentQuarters(int quarters) {
+        List<String> periods = new ArrayList<>();
+        YearMonth now = YearMonth.now();
+        for (int i = 0; i < quarters; i++) {
+            YearMonth target = now.minusMonths((long) i * 3);
+            int year    = target.getYear();
+            int quarter = (target.getMonthValue() - 1) / 3 + 1;
+            periods.add(year + "-Q" + quarter);
+        }
+        return periods;
+    }
+
     private List<String> generatePeriods() {
         List<String> periods = new ArrayList<>();
         YearMonth now = YearMonth.now();

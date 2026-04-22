@@ -14,6 +14,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -155,5 +159,31 @@ public class IndicatorCalculationService {
         int year = Integer.parseInt(period.substring(0, 4));
         String suffix = period.substring(4);
         return (year - 1) + suffix;
+    }
+
+    @Transactional
+    public List<FinancialIndicator> calculateForAllPeriods(String companyId) {
+        List<FinancialStatement> statements = fsRepository.findByCompanyIdOrderByPeriodDesc(companyId);
+        Set<String> existingPeriods = indicatorRepository.findByCompanyIdOrderByPeriodDesc(companyId)
+                .stream()
+                .map(FinancialIndicator::getPeriod)
+                .collect(Collectors.toSet());
+
+        List<FinancialIndicator> results = new ArrayList<>();
+        for (FinancialStatement fs : statements) {
+            if (existingPeriods.contains(fs.getPeriod())) {
+                log.debug("지표 계산 건너뜀 (이미 존재): companyId={}, period={}", companyId, fs.getPeriod());
+                continue;
+            }
+            try {
+                FinancialIndicator indicator = calculateAndSave(companyId, fs.getPeriod());
+                results.add(indicator);
+                log.info("소급 지표 계산 완료: companyId={}, period={}", companyId, fs.getPeriod());
+            } catch (Exception e) {
+                log.warn("소급 지표 계산 실패 (건너뜀): companyId={}, period={}, error={}",
+                        companyId, fs.getPeriod(), e.getMessage());
+            }
+        }
+        return results;
     }
 }

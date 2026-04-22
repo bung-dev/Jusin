@@ -12,6 +12,7 @@ import java.util.Optional;
 public interface PredictionResultRepository extends JpaRepository<PredictionResult, Long> {
     Optional<PredictionResult> findByCompanyIdAndPeriod(String companyId, String period);
     Optional<PredictionResult> findTopByCompanyIdOrderByCalculatedAtDesc(String companyId);
+    List<PredictionResult> findByCompanyIdOrderByPeriodDesc(String companyId);
 
     @Query("SELECT p FROM PredictionResult p " +
            "WHERE p.companyId = :companyId " +

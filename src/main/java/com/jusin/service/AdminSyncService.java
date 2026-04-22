@@ -1,7 +1,10 @@
 package com.jusin.service;
 
 import com.jusin.client.DartApiClient;
+import com.jusin.client.DartApiRateLimiter;
+import com.jusin.domain.entity.Company;
 import com.jusin.dto.response.CorpCodeSyncResponse;
+import com.jusin.dto.response.HistoricalSyncResponse;
 import com.jusin.exception.DataProcessingException;
 import com.jusin.parser.CorpCodeXmlParser;
 import com.jusin.parser.ZipExtractor;
@@ -24,6 +27,9 @@ public class AdminSyncService {
     private final ZipExtractor zipExtractor;
     private final CorpCodeXmlParser corpCodeXmlParser;
     private final CompanyRepository companyRepository;
+    private final FinancialStatementService fsService;
+    private final IndicatorCalculationService indicatorService;
+    private final DartApiRateLimiter rateLimiter;
 
     @Transactional
     public CorpCodeSyncResponse syncCorpCodes() {
@@ -60,5 +66,54 @@ public class AdminSyncService {
         long elapsed = System.currentTimeMillis() - startTime;
         log.info("corpCode 동기화 완료: 전체 상장사={}, 소요시간={}ms", total, elapsed);
         return new CorpCodeSyncResponse(total, 0, total);
+    }
+
+    @Transactional
+    public HistoricalSyncResponse syncHistorical(String stockCode, int quarters) {
+        log.info("소급 수집 시작: stockCode={}, quarters={}", stockCode, quarters);
+        try {
+            List<?> saved = fsService.collectHistorical(stockCode, quarters);
+            Company company = companyRepository.findByStockCode(stockCode)
+                    .orElse(null);
+            if (company != null) {
+                indicatorService.calculateForAllPeriods(company.getCompanyId());
+            }
+            log.info("소급 수집 완료: stockCode={}, 저장={}건", stockCode, saved.size());
+            return HistoricalSyncResponse.of(saved.size(), quarters - saved.size(), 0);
+        } catch (Exception e) {
+            log.error("소급 수집 실패: stockCode={}, error={}", stockCode, e.getMessage());
+            return HistoricalSyncResponse.of(0, 0, 1);
+        }
+    }
+
+    public HistoricalSyncResponse syncHistoricalAll(int quarters) {
+        List<Company> companies = companyRepository.findAll();
+        int total = companies.size();
+        int success = 0, failed = 0, skipped = 0;
+
+        log.info("전체 기업 소급 수집 시작: 전체={}개, quarters={}", total, quarters);
+
+        for (Company company : companies) {
+            if (!rateLimiter.canCall()) {
+                log.warn("DART API 일일 한도 도달, 소급 수집 중단: processed={}/{}", success + failed, total);
+                break;
+            }
+            try {
+                List<?> saved = fsService.collectHistorical(company.getStockCode(), quarters);
+                if (!saved.isEmpty()) {
+                    indicatorService.calculateForAllPeriods(company.getCompanyId());
+                    success++;
+                } else {
+                    skipped++;
+                }
+            } catch (Exception e) {
+                log.warn("기업 소급 수집 실패 (건너뜀): stockCode={}, error={}",
+                        company.getStockCode(), e.getMessage());
+                failed++;
+            }
+        }
+
+        log.info("전체 소급 수집 완료: success={}, skipped={}, failed={}", success, skipped, failed);
+        return HistoricalSyncResponse.ofAll(success, skipped, failed, total);
     }
 }
