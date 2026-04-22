@@ -14,6 +14,7 @@ import com.jusin.repository.FinancialStatementRepository;
 import com.jusin.repository.PredictionResultRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +38,7 @@ public class PredictionService {
     private final IndicatorCalculationService indicatorService;
     private final IndicatorScoreCalculator scoreCalculator;
 
+    @Cacheable(value = "analysisCache", key = "#stockCode + '_' + #period", condition = "#result != null")
     @Transactional
     public AnalysisResponse analyzeAndPredict(String stockCode, String companyId, String period) {
 
