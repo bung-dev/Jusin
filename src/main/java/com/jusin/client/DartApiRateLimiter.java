@@ -21,6 +21,10 @@ public class DartApiRateLimiter {
         dailyCallCount.incrementAndGet();
     }
 
+    public int getDailyUsedCount() {
+        return dailyCallCount.get();
+    }
+
     @Scheduled(cron = "0 0 0 * * *")
     public void resetDailyCount() {
         dailyCallCount.set(0);
